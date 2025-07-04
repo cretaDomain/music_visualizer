@@ -59,9 +59,9 @@ class VisualizerPainter extends CustomPainter {
       // 3. 진폭 값을 막대 높이로 변환 (정규화 및 스케일링)
       // 진폭 값은 보통 매우 작으므로, 시각적으로 잘 보이도록 증폭합니다.
       // log 함수를 사용해 값의 분포를 조절하여 자연스러운 시각화를 만듭니다.
-      final double normalizedAmplitude = amplitudes[i] * 1000; // 증폭
+      final double normalizedAmplitude = amplitudes[i] * 50000; // 증폭 계수 대폭 상향
       final double logScaledAmplitude =
-          normalizedAmplitude > 0 ? log(normalizedAmplitude + 1) * 20 : 0;
+          normalizedAmplitude > 0 ? log(normalizedAmplitude + 1) * 10 : 0; // 스케일 조정
       final double barHeight = max(minBarHeight, logScaledAmplitude.clamp(0, size.height));
 
       final double left = i * barWidth;

@@ -8,47 +8,25 @@ class AudioAnalysisService {
   /// [pcmData]는 오디오의 원본 데이터 버퍼입니다.
   /// 데시벨은 소리의 상대적인 크기를 나타내는 로그 스케일 단위입니다.
   double calculateDecibels(Uint8List pcmData) {
-    // PCM 데이터가 없으면 최소 데시벨 값을 반환합니다.
     if (pcmData.isEmpty) {
       return -120.0;
     }
 
-    double sumOfSquares = 0;
-
-    // 16비트(2바이트) 단위로 데이터를 읽어 진폭을 계산합니다.
-    for (int i = 0; i < pcmData.length; i += 2) {
-      // Little-Endian 형식의 2바이트를 하나의 16비트 정수로 변환합니다.
-      int sample = (pcmData[i + 1] << 8) | pcmData[i];
-      // 16비트 부호 있는 정수로 변환 (범위: -32768 ~ 32767)
-      if (sample > 32767) {
-        sample -= 65536;
-      }
-
-      // 진폭을 -1.0 ~ 1.0 범위로 정규화(normalize)합니다.
+    // 16-bit PCM data, so 2 bytes per sample
+    final pcm16 = pcmData.buffer.asInt16List();
+    double sumOfSquares = 0.0;
+    for (int sample in pcm16) {
       double normalizedSample = sample / 32768.0;
-
-      // 진폭의 제곱을 누적합니다.
       sumOfSquares += normalizedSample * normalizedSample;
     }
 
-    // 제곱합의 평균(Mean Square)을 계산합니다.
-    double meanSquare = sumOfSquares / (pcmData.length / 2);
-
-    // 평균의 제곱근(Root Mean Square, RMS)을 계산합니다.
-    // RMS는 오디오 신호의 실효 전력을 나타냅니다.
-    double rms = sqrt(meanSquare);
-
-    // RMS 값이 0인 경우 (완전한 무음) 로그 계산 오류를 방지합니다.
+    double rms = sqrt(sumOfSquares / pcm16.length);
     if (rms == 0.0) {
       return -120.0;
     }
 
-    // RMS 값을 사용하여 데시벨로 변환합니다. (20 * log10(rms))
-    // 기준 진폭(1.0)에 대한 상대적인 크기를 나타냅니다.
-    double db = 20 * (log(rms) / ln10);
-
-    // 데시벨 값은 일반적으로 음수로 표현됩니다. 0dB가 최대 크기입니다.
-    return db;
+    double db = 20 * log(rms) / ln10;
+    return db.isFinite ? db : -120.0;
   }
 
   // 음계와 그에 해당하는 기준 주파수를 정의한 맵
@@ -189,5 +167,62 @@ class AudioAnalysisService {
     }
 
     return amplitudes;
+  }
+
+  Map<String, dynamic> analyzeFrequency(Uint8List pcmData, {int sampleRate = 44100}) {
+    if (pcmData.isEmpty) {
+      return {'note': 'N/A', 'fft': List<double>.filled(64, 0)};
+    }
+    final pcm16 = pcmData.buffer.asInt16List();
+
+    final fft = FFT(pcm16.length);
+    final freq = fft.realFft(pcm16.map((e) => e.toDouble()).toList());
+
+    final List<double> amplitudes = [];
+    const int bandCount = 64;
+    final int samplesPerBand = (freq.length / 2) ~/ bandCount;
+
+    for (int i = 0; i < bandCount; i++) {
+      double sum = 0;
+      for (int j = 0; j < samplesPerBand; j++) {
+        final index = i * samplesPerBand + j;
+        if (index < freq.length) {
+          final complex = freq[index];
+          sum += sqrt(complex.x * complex.x + complex.y * complex.y);
+        }
+      }
+      amplitudes.add(sum / samplesPerBand);
+    }
+
+    double maxAmplitude = 0;
+    int dominantFrequencyIndex = 0;
+    for (int i = 0; i < freq.length / 2; i++) {
+      final complex = freq[i];
+      double amplitude = sqrt(complex.x * complex.x + complex.y * complex.y);
+      if (amplitude > maxAmplitude) {
+        maxAmplitude = amplitude;
+        dominantFrequencyIndex = i;
+      }
+    }
+
+    // 진폭이 특정 임계값 미만이면 노이즈로 간주
+    if (maxAmplitude < 15000000) {
+      return {'note': 'N/A', 'fft': amplitudes};
+    }
+
+    double dominantFrequency = dominantFrequencyIndex * sampleRate / pcm16.length;
+    String note = _frequencyToNote(dominantFrequency);
+
+    return {'note': note, 'fft': amplitudes};
+  }
+
+  String _frequencyToNote(double frequency) {
+    if (frequency == 0) return 'N/A';
+    const A4 = 440.0;
+    const notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+    final n = (12 * (log(frequency / A4) / log(2))).round();
+    final noteIndex = (n % 12 + 12) % 12;
+    final octave = (n / 12).floor() + 4;
+    return '${notes[noteIndex]}$octave';
   }
 }
