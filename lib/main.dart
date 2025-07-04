@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
+import 'package:music_visualizer/audio_analysis_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() {
@@ -30,10 +31,11 @@ class VisualizerPage extends StatefulWidget {
 
 class _VisualizerPageState extends State<VisualizerPage> {
   String _message = 'Checking permissions...';
+  String? _pitch;
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
-  StreamSubscription? _recorderSubscription;
+  final AudioAnalysisService _audioAnalysisService = AudioAnalysisService();
   StreamSubscription? _audioDataSubscription;
-  final StreamController<Uint8List> _audioDataController = StreamController();
+  final StreamController<Uint8List> _audioDataController = StreamController.broadcast();
 
   @override
   void initState() {
@@ -62,30 +64,25 @@ class _VisualizerPageState extends State<VisualizerPage> {
   }
 
   Future<void> _startRecording() async {
+    const int sampleRate = 44100;
     try {
       await _recorder.openRecorder();
 
-      // 데시벨 값 표시를 위한 리스너
-      _recorderSubscription = _recorder.onProgress!.listen((e) {
-        if (e.decibels != null) {
-          setState(() {
-            _message = 'Decibels: ${e.decibels?.toStringAsFixed(2)}';
-          });
-        }
-      });
-
-      // (2-3 작업) 실제 오디오 데이터 출력을 위한 리스너
       _audioDataSubscription = _audioDataController.stream.listen((buffer) {
-        // 콘솔에 데이터 길이와 앞 10바이트만 출력
-        debugPrint(
-            'Received audio data: ${buffer.length} bytes. Data: ${buffer.sublist(0, 10)}...');
+        final double decibels = _audioAnalysisService.calculateDecibels(buffer);
+        final String? pitch = _audioAnalysisService.analyzePitch(buffer, sampleRate);
+
+        setState(() {
+          _message = 'Decibels: ${decibels.toStringAsFixed(2)}';
+          _pitch = pitch;
+        });
       });
 
       await _recorder.startRecorder(
-        toStream: _audioDataController.sink, // 데이터를 우리 스트림으로 보내도록 설정
-        codec: Codec.pcm16, // 원본 데이터에 가까운 PCM 코덱 사용
+        toStream: _audioDataController.sink,
+        codec: Codec.pcm16,
         numChannels: 1,
-        sampleRate: 44100,
+        sampleRate: sampleRate,
       );
     } catch (e) {
       setState(() {
@@ -96,7 +93,6 @@ class _VisualizerPageState extends State<VisualizerPage> {
 
   Future<void> _stopRecording() async {
     await _recorder.stopRecorder();
-    await _recorderSubscription?.cancel();
     await _audioDataSubscription?.cancel();
     await _audioDataController.close();
     await _recorder.closeRecorder();
@@ -107,9 +103,19 @@ class _VisualizerPageState extends State<VisualizerPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Text(
-          _message,
-          style: const TextStyle(color: Colors.white, fontSize: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _message,
+              style: const TextStyle(color: Colors.white, fontSize: 24),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Pitch: ${_pitch ?? "N/A"}',
+              style: const TextStyle(color: Colors.white, fontSize: 24),
+            ),
+          ],
         ),
       ),
     );
