@@ -151,4 +151,43 @@ class AudioAnalysisService {
 
     return closestNote;
   }
+
+  /// FFT를 수행하고, 각 주파수 대역의 진폭(Amplitude) 리스트를 반환합니다.
+  /// 시각화를 위해 사용됩니다.
+  ///
+  /// [pcmData]는 오디오 원본 데이터입니다.
+  /// [bandCount]는 시각화에 사용할 막대(주파수 대역)의 개수입니다.
+  List<double> getFrequencyAmplitudes(Uint8List pcmData, int bandCount) {
+    if (pcmData.isEmpty) {
+      return List.filled(bandCount, 0.0);
+    }
+
+    // 1. PCM 데이터를 Float64List로 변환
+    final samples = _convertPcmToFloat(pcmData);
+
+    // 2. FFT 수행
+    final fft = FFT(samples.length);
+    final freq = fft.realFft(samples);
+
+    // 3. FFT 결과를 bandCount개의 대역으로 그룹화하고, 각 대역의 평균 진폭을 계산
+    final List<double> amplitudes = List.filled(bandCount, 0.0);
+    final int bandWidth = (freq.length / 2) ~/ bandCount;
+
+    for (int i = 0; i < bandCount; i++) {
+      double bandAmplitudeSum = 0;
+      final int start = i * bandWidth;
+      final int end = start + bandWidth;
+
+      for (int j = start; j < end; j++) {
+        final double real = freq[j].x;
+        final double imag = freq[j].y;
+        bandAmplitudeSum += sqrt(real * real + imag * imag);
+      }
+
+      // 대역의 평균 진폭을 계산하고, 시각적으로 증폭합니다.
+      amplitudes[i] = bandAmplitudeSum / bandWidth;
+    }
+
+    return amplitudes;
+  }
 }

@@ -31,7 +31,7 @@ class VisualizerPage extends StatefulWidget {
 }
 
 class _VisualizerPageState extends State<VisualizerPage> {
-  double _decibels = -120.0;
+  List<double> _amplitudes = List.filled(64, 0.0);
   String? _pitch;
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   final AudioAnalysisService _audioAnalysisService = AudioAnalysisService();
@@ -56,7 +56,7 @@ class _VisualizerPageState extends State<VisualizerPage> {
       await _startRecording();
     } else {
       setState(() {
-        _decibels = -120.0;
+        _amplitudes = List.filled(64, 0.0);
       });
     }
   }
@@ -67,11 +67,11 @@ class _VisualizerPageState extends State<VisualizerPage> {
       await _recorder.openRecorder();
 
       _audioDataSubscription = _audioDataController.stream.listen((buffer) {
-        final double decibels = _audioAnalysisService.calculateDecibels(buffer);
+        final List<double> amplitudes = _audioAnalysisService.getFrequencyAmplitudes(buffer, 64);
         final String? pitch = _audioAnalysisService.analyzePitch(buffer, sampleRate);
 
         setState(() {
-          _decibels = decibels;
+          _amplitudes = amplitudes;
           _pitch = pitch;
         });
       });
@@ -101,7 +101,8 @@ class _VisualizerPageState extends State<VisualizerPage> {
       body: CustomPaint(
         size: Size.infinite,
         painter: VisualizerPainter(
-          decibels: _decibels,
+          amplitudes: _amplitudes,
+          pitch: _pitch,
         ),
       ),
     );

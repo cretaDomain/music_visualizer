@@ -1,38 +1,82 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 class VisualizerPainter extends CustomPainter {
-  final double decibels;
+  final List<double> amplitudes; // 주파수 대역별 진폭 리스트
+  final String? pitch;
 
-  VisualizerPainter({required this.decibels});
+  VisualizerPainter({
+    required this.amplitudes,
+    this.pitch,
+  });
+
+  // 음계 이름에 따라 색상을 결정하는 헬퍼 메소드
+  Color _getColorForPitch(String? pitch) {
+    if (pitch == null) {
+      return Colors.blue; // 기본 색상
+    }
+    // 'C', 'D', 'E' 같은 음계 이름만 추출 (옥타브 번호, # 등은 제외)
+    final noteName = pitch.substring(0, 1).toUpperCase();
+
+    switch (noteName) {
+      case 'C':
+        return Colors.red;
+      case 'D':
+        return Colors.orange;
+      case 'E':
+        return Colors.yellow;
+      case 'F':
+        return Colors.green;
+      case 'G':
+        return Colors.indigo;
+      case 'A':
+        return Colors.purple;
+      case 'B':
+        return Colors.pink;
+      default:
+        return Colors.blue;
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 화면 중앙을 기준으로 그리기 위한 Paint 객체
-    final paint = Paint()
-      ..color = Colors.blue
+    // 1. 네온 효과를 위한 Paint 객체 (블러 효과)
+    final glowPaint = Paint()
+      ..color = _getColorForPitch(pitch).withOpacity(0.5)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0);
+
+    // 2. 실제 막대를 그릴 Paint 객체
+    final barPaint = Paint()
+      ..color = _getColorForPitch(pitch)
       ..style = PaintingStyle.fill;
 
-    // 데시벨 값을 시각적인 높이로 변환
-    // 데시벨은 보통 음수이며, 0에 가까울수록 소리가 큽니다. (-120 ~ 0)
-    // -60dB일 때 화면 높이의 절반, 0dB일 때 화면 전체 높이가 되도록 매핑합니다.
-    final normalizedDb = (decibels + 60).clamp(0, 60) / 60; // 0.0 ~ 1.0 범위로 정규화
-    final barHeight = normalizedDb * size.height;
+    if (amplitudes.isEmpty) return;
 
-    // 화면 중앙에 막대 그리기
-    const barWidth = 100.0;
-    final rect = Rect.fromLTWH(
-      (size.width - barWidth) / 2, // x 위치 (가운데 정렬)
-      size.height - barHeight, // y 위치 (아래쪽부터 높이 계산)
-      barWidth, // 너비
-      barHeight, // 높이
-    );
+    final double barWidth = size.width / amplitudes.length;
+    const double minBarHeight = 2.0;
 
-    canvas.drawRect(rect, paint);
+    for (int i = 0; i < amplitudes.length; i++) {
+      // 3. 진폭 값을 막대 높이로 변환 (정규화 및 스케일링)
+      // 진폭 값은 보통 매우 작으므로, 시각적으로 잘 보이도록 증폭합니다.
+      // log 함수를 사용해 값의 분포를 조절하여 자연스러운 시각화를 만듭니다.
+      final double normalizedAmplitude = amplitudes[i] * 1000; // 증폭
+      final double logScaledAmplitude =
+          normalizedAmplitude > 0 ? log(normalizedAmplitude + 1) * 20 : 0;
+      final double barHeight = max(minBarHeight, logScaledAmplitude.clamp(0, size.height));
+
+      final double left = i * barWidth;
+      final double top = size.height - barHeight;
+      final rect = Rect.fromLTWH(left, top, barWidth - 2, barHeight); // 막대 간 간격
+
+      // 4. 네온 효과(glow)를 먼저 그리고, 그 위에 실제 막대를 그립니다.
+      canvas.drawRect(rect.inflate(10.0), glowPaint); // inflate로 영역을 약간 확장
+      canvas.drawRect(rect, barPaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant VisualizerPainter oldDelegate) {
-    // 데시벨 값이 변경될 때만 다시 그리도록 설정하여 성능을 최적화합니다.
-    return decibels != oldDelegate.decibels;
+    // amplitudes 리스트나 pitch가 변경될 때 다시 그립니다.
+    return amplitudes != oldDelegate.amplitudes || pitch != oldDelegate.pitch;
   }
 }
