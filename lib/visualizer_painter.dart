@@ -42,7 +42,7 @@ class VisualizerPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // 1. 네온 효과를 위한 Paint 객체 (블러 효과)
     final glowPaint = Paint()
-      ..color = _getColorForPitch(pitch).withOpacity(0.5)
+      ..color = _getColorForPitch(pitch).withValues(alpha: 0.5)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0);
 
     // 2. 실제 막대를 그릴 Paint 객체

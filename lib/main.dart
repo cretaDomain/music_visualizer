@@ -3,7 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:fftea/fftea.dart';
+//import 'package:fftea/fftea.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -21,10 +21,11 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with TickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
   final AudioAnalysisService _analysisService = AudioAnalysisService();
   StreamSubscription<Uint8List>? _audioStreamSubscription;
+  late final AnimationController _animationController;
 
   bool _isRecording = false;
   String _note = '';
@@ -51,6 +52,10 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat();
     _init();
   }
 
@@ -58,7 +63,7 @@ class _MyAppState extends State<MyApp> {
     final status = await Permission.microphone.request();
     if (status != PermissionStatus.granted) {
       // Handle permission denial
-      print('Microphone permission not granted');
+      //print('Microphone permission not granted');
       return;
     }
     setState(() {
@@ -70,6 +75,7 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _recorder.dispose();
     _audioStreamSubscription?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -135,13 +141,14 @@ class _MyAppState extends State<MyApp> {
           }
         }
 
-        setState(() {
-          _note = newNote;
-          _fftData = stretchedFftData;
-          _colorSparks = nextSparks; // Assign the new list to the state
-        });
+        // setState is no longer needed here, as AnimatedBuilder handles repainting.
+        // Simply update the state variables directly.
+        _note = newNote;
+        _fftData = stretchedFftData;
+        _colorSparks = nextSparks;
       });
 
+      // We only need to set state here to update the button icon
       setState(() {
         _isRecording = true;
       });
@@ -197,13 +204,18 @@ class _MyAppState extends State<MyApp> {
         backgroundColor: Colors.black,
         body: Center(
           child: _isInitialized
-              ? CustomPaint(
-                  size: Size.infinite,
-                  painter: VisualizerPainter(
-                    note: _note,
-                    fftData: _fftData,
-                    sparks: _colorSparks,
-                  ),
+              ? AnimatedBuilder(
+                  animation: _animationController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      size: Size.infinite,
+                      painter: VisualizerPainter(
+                        note: _note,
+                        fftData: _fftData,
+                        sparks: _colorSparks,
+                      ),
+                    );
+                  },
                 )
               : const CircularProgressIndicator(),
         ),
@@ -228,6 +240,7 @@ class VisualizerPainter extends CustomPainter {
     required this.sparks,
   });
 
+  // ignore: unused_element
   Color _getColorForNote(String note) {
     if (note.isEmpty || note == 'N/A') return Colors.white;
     // This is now used for the main bar color, maybe return a constant color
@@ -255,7 +268,7 @@ class VisualizerPainter extends CustomPainter {
         barHeight,
       );
 
-      barPaint.color = Colors.white.withOpacity(0.8);
+      barPaint.color = Colors.white.withValues(alpha: 0.8);
       canvas.drawRect(rect, barPaint);
     }
 
@@ -272,7 +285,7 @@ class VisualizerPainter extends CustomPainter {
       final glowIntensity = (spark.octave - 3).clamp(1, 4).toDouble();
 
       final glowPaint = Paint()
-        ..color = spark.color.withOpacity(spark.life * 0.7) // Fade out
+        ..color = spark.color.withValues(alpha: spark.life * 0.7) // Fade out
         ..maskFilter = MaskFilter.blur(
             BlurStyle.normal, convertRadiusToSigma(10.0 * glowIntensity * spark.life));
 
@@ -313,8 +326,11 @@ class VisualizerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant VisualizerPainter oldDelegate) {
-    // Force repaint for debugging purposes
-    return true;
+    // Repainting is now driven by the AnimationController via AnimatedBuilder.
+    // This method is for when painter properties themselves change.
+    return oldDelegate.note != note ||
+        oldDelegate.fftData != fftData ||
+        oldDelegate.sparks != sparks;
   }
 }
 
