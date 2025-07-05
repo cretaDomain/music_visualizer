@@ -3,6 +3,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:creta_music_visualizer/src/models/circle_spark.dart';
+import 'package:creta_music_visualizer/src/models/visualizer_type.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
@@ -22,14 +24,17 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
   final AudioAnalysisService _analysisService = AudioAnalysisService();
   StreamSubscription<Uint8List>? _audioStreamSubscription;
   late final AnimationController _animationController;
+  Timer? _visualizerTimer;
 
   // ignore: unused_field
-  bool _isRecording = false;
+  final bool _isRecording = false;
   String _note = '';
   List<double> _fftData = List.filled(64, 0.0);
   final List<List<double>> _fftDataHistory = [];
   List<ColorSpark> _colorSparks = [];
+  List<CircleSpark> _circleSparks = [];
   bool _isInitialized = false;
+  VisualizerType _currentType = VisualizerType.bars;
 
   final Map<String, Color> _noteColorMap = {
     'C': Colors.red,
@@ -53,6 +58,16 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat();
+
+    _visualizerTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentType =
+              _currentType == VisualizerType.bars ? VisualizerType.circles : VisualizerType.bars;
+        });
+      }
+    });
+
     _init();
   }
 
@@ -61,10 +76,12 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
     if (status != PermissionStatus.granted) {
       return;
     }
-    setState(() {
-      _isInitialized = true;
-    });
-    _startRecording();
+    if (mounted) {
+      setState(() {
+        _isInitialized = true;
+      });
+      _startRecording();
+    }
   }
 
   @override
@@ -72,6 +89,7 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
     _stopRecording();
     _recorder.dispose();
     _animationController.dispose();
+    _visualizerTimer?.cancel();
     super.dispose();
   }
 
@@ -107,43 +125,68 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
 
         final stretchedFftData = _stretchContrast(weightedFftData);
 
-        final nextSparks = <ColorSpark>[];
-        for (final spark in _colorSparks) {
-          spark.life -= 0.04;
-          if (spark.life > 0) {
-            nextSparks.add(spark);
-          }
-        }
-
+        // Update effects based on visualizer type
         final newNote = result['note'] as String;
-        if (newNote.isNotEmpty && newNote != 'N/A') {
-          final noteName = newNote.substring(0, newNote.length - 1);
-          final noteOctave = int.tryParse(newNote.substring(newNote.length - 1)) ?? 4;
-          final noteColor = _noteColorMap[noteName];
+        _updateVisualEffects(newNote, stretchedFftData);
 
-          if (noteColor != null) {
-            final random = Random();
-            for (int i = 0; i < 2; i++) {
-              final sparkIndex = random.nextInt(stretchedFftData.length);
-              nextSparks.add(ColorSpark(
-                index: sparkIndex,
-                color: noteColor,
-                octave: noteOctave,
-              ));
-            }
-          }
-        }
         _note = newNote;
         _fftData = stretchedFftData;
-        _colorSparks = nextSparks;
       });
 
       if (mounted) {
-        setState(() {
-          _isRecording = true;
-        });
+        setState(() {});
       }
     }
+  }
+
+  void _updateVisualEffects(String newNote, List<double> fftData) {
+    // Bar sparks
+    final nextColorSparks = <ColorSpark>[];
+    for (final spark in _colorSparks) {
+      spark.life -= 0.04;
+      if (spark.life > 0) {
+        nextColorSparks.add(spark);
+      }
+    }
+
+    // Circle sparks
+    final nextCircleSparks = <CircleSpark>[];
+    for (final spark in _circleSparks) {
+      spark.life -= 0.02; // Slower fade for circles
+      if (spark.life > 0) {
+        nextCircleSparks.add(spark);
+      }
+    }
+
+    if (newNote.isNotEmpty && newNote != 'N/A') {
+      final noteName = newNote.substring(0, newNote.length - 1);
+      final noteOctave = int.tryParse(newNote.substring(newNote.length - 1)) ?? 4;
+      final noteColor = _noteColorMap[noteName];
+
+      if (noteColor != null) {
+        final random = Random();
+        if (_currentType == VisualizerType.bars) {
+          for (int i = 0; i < 2; i++) {
+            final sparkIndex = random.nextInt(fftData.length);
+            nextColorSparks.add(ColorSpark(
+              index: sparkIndex,
+              color: noteColor,
+              octave: noteOctave,
+            ));
+          }
+        } else if (_currentType == VisualizerType.circles) {
+          final maxAmplitude = fftData.reduce(max);
+          nextCircleSparks.add(CircleSpark(
+            center: Offset(random.nextDouble(), random.nextDouble()),
+            color: noteColor,
+            octave: noteOctave,
+            maxRadius: maxAmplitude * 2.0, // Scale radius by amplitude
+          ));
+        }
+      }
+    }
+    _colorSparks = nextColorSparks;
+    _circleSparks = nextCircleSparks;
   }
 
   Future<void> _stopRecording() async {
@@ -153,10 +196,10 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
     }
     if (mounted) {
       setState(() {
-        _isRecording = false;
         _fftData = List.filled(64, 0.0);
         _fftDataHistory.clear();
         _colorSparks.clear();
+        _circleSparks.clear();
         _note = '';
       });
     }
@@ -190,9 +233,11 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
               return CustomPaint(
                 size: Size.infinite,
                 painter: VisualizerPainter(
+                  type: _currentType,
                   note: _note,
                   fftData: _fftData,
-                  sparks: _colorSparks,
+                  barSparks: _colorSparks,
+                  circleSparks: _circleSparks,
                 ),
               );
             },
