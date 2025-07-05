@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -28,6 +29,7 @@ class _MyAppState extends State<MyApp> {
   bool _isRecording = false;
   String _note = '';
   List<double> _fftData = List.filled(64, 0.0);
+  final List<List<double>> _fftDataHistory = [];
   bool _isInitialized = false;
 
   @override
@@ -57,13 +59,41 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _startRecording() async {
     if (await _recorder.hasPermission()) {
-      final stream = await _recorder.startStream(const RecordConfig(encoder: AudioEncoder.pcm16bits));
-      
+      final stream =
+          await _recorder.startStream(const RecordConfig(encoder: AudioEncoder.pcm16bits));
+
       _audioStreamSubscription = stream.listen((data) {
         final result = _analysisService.analyzeFrequency(data);
+        final newFftData = result['fft'] as List<double>;
+
+        _fftDataHistory.add(newFftData);
+        if (_fftDataHistory.length > 24) {
+          _fftDataHistory.removeAt(0);
+        }
+
+        final averagedFftData = List<double>.filled(newFftData.length, 0.0);
+        for (final fft in _fftDataHistory) {
+          for (int i = 0; i < fft.length; i++) {
+            averagedFftData[i] += fft[i];
+          }
+        }
+
+        for (int i = 0; i < averagedFftData.length; i++) {
+          averagedFftData[i] /= _fftDataHistory.length;
+        }
+
+        // 1. 가중치 곡선 적용 (중앙 증폭)
+        final weightedFftData = List<double>.generate(averagedFftData.length, (i) {
+          final weight = _calculateGaussianWeight(i, averagedFftData.length);
+          return averagedFftData[i] * weight;
+        });
+
+        // 2. 편차 증폭 (Contrast Stretching)
+        final stretchedFftData = _stretchContrast(weightedFftData);
+
         setState(() {
           _note = result['note'] as String;
-          _fftData = result['fft'] as List<double>;
+          _fftData = stretchedFftData;
         });
       });
 
@@ -79,6 +109,7 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _isRecording = false;
       _fftData = List.filled(64, 0.0);
+      _fftDataHistory.clear();
       _note = '';
     });
   }
@@ -89,6 +120,28 @@ class _MyAppState extends State<MyApp> {
     } else {
       _startRecording();
     }
+  }
+
+  double _calculateGaussianWeight(int index, int totalLength,
+      {double peakFactor = 1.5, double spreadFactor = 12.0}) {
+    final center = totalLength / 2.0;
+    // Real Gaussian function: e^(-(x-b)^2 / (2c^2))
+    final exponent = -pow(index - center, 2) / (2 * pow(spreadFactor, 2));
+    final weight = exp(exponent);
+
+    // Apply peak factor: baseline is 1 (original value), peak is amplified
+    return 1 + weight * (peakFactor - 1);
+  }
+
+  List<double> _stretchContrast(List<double> data) {
+    if (data.every((d) => d == 0)) return data;
+
+    double minVal = data.reduce((a, b) => a < b ? a : b);
+    double maxVal = data.reduce((a, b) => a > b ? a : b);
+
+    if (maxVal == minVal) return List.filled(data.length, 0.5);
+
+    return data.map((d) => (d - minVal) / (maxVal - minVal)).toList();
   }
 
   @override
@@ -127,12 +180,17 @@ class VisualizerPainter extends CustomPainter {
   });
 
   final Map<String, Color> _noteColorMap = {
-    'C': Colors.red, 'C#': Colors.redAccent,
-    'D': Colors.orange, 'D#': Colors.orangeAccent,
+    'C': Colors.red,
+    'C#': Colors.redAccent,
+    'D': Colors.orange,
+    'D#': Colors.orangeAccent,
     'E': Colors.yellow,
-    'F': Colors.green, 'F#': Colors.greenAccent,
-    'G': Colors.blue, 'G#': Colors.lightBlueAccent,
-    'A': Colors.indigo, 'A#': Colors.indigoAccent,
+    'F': Colors.green,
+    'F#': Colors.greenAccent,
+    'G': Colors.blue,
+    'G#': Colors.lightBlueAccent,
+    'A': Colors.indigo,
+    'A#': Colors.indigoAccent,
     'B': Colors.purple,
   };
 
@@ -152,7 +210,7 @@ class VisualizerPainter extends CustomPainter {
     final color = _getColorForNote(note);
 
     for (int i = 0; i < fftData.length; i++) {
-      final normalizedAmplitude = (fftData[i] / 10000000).clamp(0, 1);
+      final normalizedAmplitude = fftData[i].clamp(0, 1);
       final barHeight = normalizedAmplitude * maxBarHeight;
       if (barHeight <= 0) continue;
 
@@ -166,12 +224,12 @@ class VisualizerPainter extends CustomPainter {
       paint.color = color.withOpacity(0.7);
       paint.maskFilter = MaskFilter.blur(BlurStyle.normal, convertRadiusToSigma(5));
       canvas.drawRect(rect, paint);
-      
+
       paint.maskFilter = null;
       paint.color = color;
       canvas.drawRect(rect, paint);
     }
-    
+
     if (note.isNotEmpty && note != 'N/A') {
       final textPainter = TextPainter(
         text: TextSpan(
@@ -200,8 +258,8 @@ class VisualizerPainter extends CustomPainter {
   bool shouldRepaint(covariant VisualizerPainter oldDelegate) {
     // Simple deep comparison for the list
     if (oldDelegate.fftData.length != fftData.length) return true;
-    for(int i = 0; i < fftData.length; i++) {
-      if(oldDelegate.fftData[i] != fftData[i]) return true;
+    for (int i = 0; i < fftData.length; i++) {
+      if (oldDelegate.fftData[i] != fftData[i]) return true;
     }
     return oldDelegate.note != note;
   }

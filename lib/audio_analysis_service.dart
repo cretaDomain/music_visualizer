@@ -152,18 +152,21 @@ class AudioAnalysisService {
     final int bandWidth = (freq.length / 2) ~/ bandCount;
 
     for (int i = 0; i < bandCount; i++) {
-      double bandAmplitudeSum = 0;
+      double maxInBand = 0.0;
       final int start = i * bandWidth;
       final int end = start + bandWidth;
 
       for (int j = start; j < end; j++) {
         final double real = freq[j].x;
         final double imag = freq[j].y;
-        bandAmplitudeSum += sqrt(real * real + imag * imag);
+        final double amplitude = sqrt(real * real + imag * imag);
+        if (amplitude > maxInBand) {
+          maxInBand = amplitude;
+        }
       }
 
       // 대역의 평균 진폭을 계산하고, 시각적으로 증폭합니다.
-      amplitudes[i] = bandAmplitudeSum / bandWidth;
+      amplitudes[i] = maxInBand;
     }
 
     return amplitudes;
@@ -174,6 +177,9 @@ class AudioAnalysisService {
       return {'note': 'N/A', 'fft': List<double>.filled(64, 0)};
     }
     final pcm16 = pcmData.buffer.asInt16List();
+    if (pcm16.isEmpty) {
+      return {'note': 'N/A', 'fft': List<double>.filled(64, 0)};
+    }
 
     final fft = FFT(pcm16.length);
     final freq = fft.realFft(pcm16.map((e) => e.toDouble()).toList());
@@ -183,15 +189,18 @@ class AudioAnalysisService {
     final int samplesPerBand = (freq.length / 2) ~/ bandCount;
 
     for (int i = 0; i < bandCount; i++) {
-      double sum = 0;
+      double maxInBand = 0.0;
       for (int j = 0; j < samplesPerBand; j++) {
         final index = i * samplesPerBand + j;
         if (index < freq.length) {
           final complex = freq[index];
-          sum += sqrt(complex.x * complex.x + complex.y * complex.y);
+          final amplitude = sqrt(complex.x * complex.x + complex.y * complex.y);
+          if (amplitude > maxInBand) {
+            maxInBand = amplitude;
+          }
         }
       }
-      amplitudes.add(sum / samplesPerBand);
+      amplitudes.add(maxInBand);
     }
 
     double maxAmplitude = 0;
@@ -205,8 +214,7 @@ class AudioAnalysisService {
       }
     }
 
-    // 진폭이 특정 임계값 미만이면 노이즈로 간주
-    if (maxAmplitude < 15000000) {
+    if (maxAmplitude < 3500000) {
       return {'note': 'N/A', 'fft': amplitudes};
     }
 
