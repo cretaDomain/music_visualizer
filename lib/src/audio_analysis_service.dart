@@ -226,6 +226,7 @@ class AudioAnalysisService {
 
   String _frequencyToNote(double frequency) {
     if (frequency == 0) return 'N/A';
+    // ignore: constant_identifier_names
     const A4 = 440.0;
     const notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
     final n = (12 * (log(frequency / A4) / log(2))).round();

@@ -1,16 +1,40 @@
-# music_visualizer
+# Music Visualizer
 
-A new Flutter project.
+A music visualizer widget for Flutter that renders beautiful, animated visualizations from audio input, like the ones seen in classic media players.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+*   Real-time audio processing from microphone input.
+*   Smooth, FFT-based bar visualization.
+*   Dynamic, note-based color glows with a beautiful fade-out effect.
 
-A few resources to get you started if this is your first Flutter project:
+## Getting started
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+TODO: List prerequisites and provide installation instructions.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Usage
+
+Here is a basic example of how to use the `MusicVisualizer` widget.
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:music_visualizer/music_visualizer.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: MusicVisualizer(),
+      ),
+    );
+  }
+}
+```
