@@ -2,6 +2,9 @@
 
 A music visualizer widget for Flutter that renders beautiful, animated visualizations from audio input, like the ones seen in classic media players.
 
+![example](https://raw.githubusercontent.com/cretaDomain/music_visualizer/refs/heads/main/example.png)
+
+
 ## Platform Support
 
 This package is designed for **Windows only**, as it relies on platform-specific implementations for audio capture.
@@ -22,7 +25,7 @@ Here is a basic example of how to use the `MusicVisualizer` widget.
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:music_visualizer/music_visualizer.dart';
+import 'package:creta_music_visualizer/music_visualizer.dart';
 
 void main() {
   runApp(const MyApp());

@@ -3,11 +3,11 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:music_visualizer/src/models/color_spark.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
 import 'audio_analysis_service.dart';
+import 'models/color_spark.dart';
 import 'visualizer_painter.dart';
 
 class MusicVisualizer extends StatefulWidget {

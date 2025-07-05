@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:music_visualizer/music_visualizer.dart';
+import 'package:creta_music_visualizer/music_visualizer.dart';
 
 void main() {
   runApp(const MyApp());
