@@ -30,7 +30,23 @@ class _MyAppState extends State<MyApp> {
   String _note = '';
   List<double> _fftData = List.filled(64, 0.0);
   final List<List<double>> _fftDataHistory = [];
+  List<ColorSpark> _colorSparks = [];
   bool _isInitialized = false;
+
+  final Map<String, Color> _noteColorMap = {
+    'C': Colors.red,
+    'C#': Colors.redAccent,
+    'D': Colors.orange,
+    'D#': Colors.orangeAccent,
+    'E': Colors.yellow,
+    'F': Colors.green,
+    'F#': Colors.greenAccent,
+    'G': Colors.blue,
+    'G#': Colors.lightBlueAccent,
+    'A': Colors.indigo,
+    'A#': Colors.indigoAccent,
+    'B': Colors.purple,
+  };
 
   @override
   void initState() {
@@ -91,9 +107,38 @@ class _MyAppState extends State<MyApp> {
         // 2. 편차 증폭 (Contrast Stretching)
         final stretchedFftData = _stretchContrast(weightedFftData);
 
+        // Spark Management - Create a new list for the new state
+        final nextSparks = <ColorSpark>[];
+        for (final spark in _colorSparks) {
+          spark.life -= 0.04; // Update life
+          if (spark.life > 0) {
+            nextSparks.add(spark); // Add to new list if alive
+          }
+        }
+
+        final newNote = result['note'] as String;
+        if (newNote.isNotEmpty && newNote != 'N/A') {
+          final noteName = newNote.substring(0, newNote.length - 1);
+          final noteOctave = int.tryParse(newNote.substring(newNote.length - 1)) ?? 4;
+          final noteColor = _noteColorMap[noteName];
+
+          if (noteColor != null) {
+            final random = Random();
+            for (int i = 0; i < 2; i++) {
+              final sparkIndex = random.nextInt(stretchedFftData.length);
+              nextSparks.add(ColorSpark(
+                index: sparkIndex,
+                color: noteColor,
+                octave: noteOctave,
+              ));
+            }
+          }
+        }
+
         setState(() {
-          _note = result['note'] as String;
+          _note = newNote;
           _fftData = stretchedFftData;
+          _colorSparks = nextSparks; // Assign the new list to the state
         });
       });
 
@@ -110,6 +155,7 @@ class _MyAppState extends State<MyApp> {
       _isRecording = false;
       _fftData = List.filled(64, 0.0);
       _fftDataHistory.clear();
+      _colorSparks.clear();
       _note = '';
     });
   }
@@ -156,6 +202,7 @@ class _MyAppState extends State<MyApp> {
                   painter: VisualizerPainter(
                     note: _note,
                     fftData: _fftData,
+                    sparks: _colorSparks,
                   ),
                 )
               : const CircularProgressIndicator(),
@@ -173,42 +220,29 @@ class _MyAppState extends State<MyApp> {
 class VisualizerPainter extends CustomPainter {
   final String note;
   final List<double> fftData;
+  final List<ColorSpark> sparks;
 
   VisualizerPainter({
     required this.note,
     required this.fftData,
+    required this.sparks,
   });
-
-  final Map<String, Color> _noteColorMap = {
-    'C': Colors.red,
-    'C#': Colors.redAccent,
-    'D': Colors.orange,
-    'D#': Colors.orangeAccent,
-    'E': Colors.yellow,
-    'F': Colors.green,
-    'F#': Colors.greenAccent,
-    'G': Colors.blue,
-    'G#': Colors.lightBlueAccent,
-    'A': Colors.indigo,
-    'A#': Colors.indigoAccent,
-    'B': Colors.purple,
-  };
 
   Color _getColorForNote(String note) {
     if (note.isEmpty || note == 'N/A') return Colors.white;
-    final noteName = note.substring(0, note.length - 1);
-    return _noteColorMap[noteName] ?? Colors.white;
+    // This is now used for the main bar color, maybe return a constant color
+    return Colors.white;
   }
 
   @override
   void paint(Canvas canvas, Size size) {
     if (fftData.isEmpty) return;
 
-    final paint = Paint()..style = PaintingStyle.fill;
+    final barPaint = Paint()..style = PaintingStyle.fill;
     final barWidth = size.width / fftData.length;
     final maxBarHeight = size.height;
-    final color = _getColorForNote(note);
 
+    // 1. Draw the base bars in a neutral color
     for (int i = 0; i < fftData.length; i++) {
       final normalizedAmplitude = fftData[i].clamp(0, 1);
       final barHeight = normalizedAmplitude * maxBarHeight;
@@ -217,19 +251,42 @@ class VisualizerPainter extends CustomPainter {
       final rect = Rect.fromLTWH(
         i * barWidth,
         size.height - barHeight,
-        barWidth - 1,
+        barWidth, // Use full width for a fuller look
         barHeight,
       );
 
-      paint.color = color.withOpacity(0.7);
-      paint.maskFilter = MaskFilter.blur(BlurStyle.normal, convertRadiusToSigma(5));
-      canvas.drawRect(rect, paint);
-
-      paint.maskFilter = null;
-      paint.color = color;
-      canvas.drawRect(rect, paint);
+      barPaint.color = Colors.white.withOpacity(0.8);
+      canvas.drawRect(rect, barPaint);
     }
 
+    // 2. Draw the color sparks as a glow effect
+    for (final spark in sparks) {
+      if (spark.index >= fftData.length) continue;
+
+      final normalizedAmplitude = fftData[spark.index].clamp(0, 1);
+      if (normalizedAmplitude <= 0) continue;
+
+      final barHeight = normalizedAmplitude * maxBarHeight;
+
+      // Make the glow more intense for higher octaves
+      final glowIntensity = (spark.octave - 3).clamp(1, 4).toDouble();
+
+      final glowPaint = Paint()
+        ..color = spark.color.withOpacity(spark.life * 0.7) // Fade out
+        ..maskFilter = MaskFilter.blur(
+            BlurStyle.normal, convertRadiusToSigma(10.0 * glowIntensity * spark.life));
+
+      final glowRect = Rect.fromLTWH(
+        spark.index * barWidth,
+        size.height - barHeight,
+        barWidth,
+        barHeight,
+      );
+
+      canvas.drawRect(glowRect, glowPaint);
+    }
+
+    // 3. Draw the note text
     if (note.isNotEmpty && note != 'N/A') {
       final textPainter = TextPainter(
         text: TextSpan(
@@ -256,11 +313,21 @@ class VisualizerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant VisualizerPainter oldDelegate) {
-    // Simple deep comparison for the list
-    if (oldDelegate.fftData.length != fftData.length) return true;
-    for (int i = 0; i < fftData.length; i++) {
-      if (oldDelegate.fftData[i] != fftData[i]) return true;
-    }
-    return oldDelegate.note != note;
+    // Force repaint for debugging purposes
+    return true;
   }
+}
+
+class ColorSpark {
+  int index;
+  Color color;
+  double life;
+  int octave;
+
+  ColorSpark({
+    required this.index,
+    required this.color,
+    this.life = 1.0,
+    required this.octave,
+  });
 }
