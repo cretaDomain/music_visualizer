@@ -3,7 +3,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:creta_music_visualizer/src/models/circle_spark.dart';
+import 'package:creta_music_visualizer/src/models/shape_spark.dart';
+import 'package:creta_music_visualizer/src/models/shape_type.dart';
 import 'package:creta_music_visualizer/src/models/visualizer_type.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -32,9 +33,9 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
   List<double> _fftData = List.filled(64, 0.0);
   final List<List<double>> _fftDataHistory = [];
   List<ColorSpark> _colorSparks = [];
-  List<CircleSpark> _circleSparks = [];
+  List<ShapeSpark> _shapeSparks = [];
   bool _isInitialized = false;
-  VisualizerType _currentType = VisualizerType.bars;
+  VisualizerType _currentType = VisualizerType.circles;
 
   final Map<String, Color> _noteColorMap = {
     'C': Colors.red,
@@ -149,12 +150,12 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
       }
     }
 
-    // Circle sparks
-    final nextCircleSparks = <CircleSpark>[];
-    for (final spark in _circleSparks) {
-      spark.life -= 0.02; // Slower fade for circles
+    // Shape sparks
+    final nextShapeSparks = <ShapeSpark>[];
+    for (final spark in _shapeSparks) {
+      spark.life -= 0.02; // Slower fade for shapes
       if (spark.life > 0) {
-        nextCircleSparks.add(spark);
+        nextShapeSparks.add(spark);
       }
     }
 
@@ -176,17 +177,31 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
           }
         } else if (_currentType == VisualizerType.circles) {
           final maxAmplitude = fftData.reduce(max);
-          nextCircleSparks.add(CircleSpark(
+
+          // The shape is determined by a random index in the FFT spectrum, not the overall note octave.
+          final sparkIndex = random.nextInt(fftData.length);
+          final ShapeType shape;
+          if (sparkIndex < 22) {
+            shape = ShapeType.triangle;
+          } else if (sparkIndex < 46) {
+            // 22 + 24
+            shape = ShapeType.circle;
+          } else {
+            shape = ShapeType.star;
+          }
+
+          nextShapeSparks.add(ShapeSpark(
             center: Offset(random.nextDouble(), random.nextDouble()),
             color: noteColor,
             octave: noteOctave,
-            maxRadius: maxAmplitude * 2.0, // Scale radius by amplitude
+            maxRadius: maxAmplitude * 2.0,
+            shape: shape,
           ));
         }
       }
     }
     _colorSparks = nextColorSparks;
-    _circleSparks = nextCircleSparks;
+    _shapeSparks = nextShapeSparks;
   }
 
   Future<void> _stopRecording() async {
@@ -199,7 +214,7 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
         _fftData = List.filled(64, 0.0);
         _fftDataHistory.clear();
         _colorSparks.clear();
-        _circleSparks.clear();
+        _shapeSparks.clear();
         _note = '';
       });
     }
@@ -237,7 +252,7 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
                   note: _note,
                   fftData: _fftData,
                   barSparks: _colorSparks,
-                  circleSparks: _circleSparks,
+                  shapeSparks: _shapeSparks,
                 ),
               );
             },
