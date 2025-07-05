@@ -20,6 +20,9 @@ version: 1.0.0
 homepage: # TODO: Add your homepage URL
 repository: # TODO: Add your repository URL
 
+platforms:
+  windows:
+
 environment:
   sdk: '>=3.3.4 <4.0.0'
 
