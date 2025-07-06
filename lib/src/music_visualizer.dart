@@ -36,6 +36,7 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
   List<ShapeSpark> _shapeSparks = [];
   bool _isInitialized = false;
   VisualizerType _currentType = VisualizerType.circles;
+  int _highlightCounter = 0;
 
   final Map<String, Color> _noteColorMap = {
     'C': Colors.red,
@@ -63,8 +64,8 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
     _visualizerTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {
         setState(() {
-          _currentType =
-              _currentType == VisualizerType.bars ? VisualizerType.circles : VisualizerType.bars;
+          final nextIndex = (_currentType.index + 1) % VisualizerType.values.length;
+          _currentType = VisualizerType.values[nextIndex];
         });
       }
     });
@@ -130,7 +131,6 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
         final newNote = result['note'] as String;
         _updateVisualEffects(newNote, stretchedFftData);
 
-        _note = newNote;
         _fftData = stretchedFftData;
       });
 
@@ -202,6 +202,13 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
     }
     _colorSparks = nextColorSparks;
     _shapeSparks = nextShapeSparks;
+    if (_highlightCounter % 7 == 0) {
+      _highlightCounter = 0;
+      _note = newNote;
+    } else {
+      //_note = '';
+    }
+    _highlightCounter++;
   }
 
   Future<void> _stopRecording() async {
@@ -216,6 +223,7 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
         _colorSparks.clear();
         _shapeSparks.clear();
         _note = '';
+        _highlightCounter = 0;
       });
     }
   }

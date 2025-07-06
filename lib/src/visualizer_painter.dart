@@ -34,6 +34,9 @@ class VisualizerPainter extends CustomPainter {
       case VisualizerType.circles:
         _drawShapes(canvas, size);
         break;
+      case VisualizerType.gradientBars:
+        _drawGradientBars(canvas, size);
+        break;
     }
   }
 
@@ -205,6 +208,100 @@ class VisualizerPainter extends CustomPainter {
       textPainter.layout(minWidth: 0, maxWidth: size.width);
       final offset = Offset((size.width - textPainter.width) / 2, 20);
       textPainter.paint(canvas, offset);
+    }
+  }
+
+  void _drawGradientBars(Canvas canvas, Size size) {
+    _drawPiano(canvas, size);
+    _drawGradientArea(canvas, size);
+  }
+
+  void _drawGradientArea(Canvas canvas, Size size) {
+    final barAreaHeight = size.height * 0.5;
+    final totalFftValue = fftData.reduce((a, b) => a + b);
+    if (totalFftValue <= 0) return;
+
+    final barPaint = Paint()..style = PaintingStyle.fill;
+    double currentX = 0;
+
+    for (int i = 0; i < fftData.length; i++) {
+      final barWidth = (fftData[i] / totalFftValue) * size.width;
+      if (barWidth <= 0) continue;
+
+      final hue = (i / fftData.length) * 360;
+      barPaint.color = HSLColor.fromAHSL(1.0, hue, 1.0, 0.6).toColor();
+
+      final rect = Rect.fromLTWH(currentX, 0, barWidth, barAreaHeight);
+      canvas.drawRect(rect, barPaint);
+
+      currentX += barWidth;
+    }
+  }
+
+  void _drawPiano(Canvas canvas, Size size) {
+    final pianoAreaHeight = size.height * 0.5;
+    final pianoTop = size.height - pianoAreaHeight;
+    const totalWhiteKeys = 21; // 3 octaves
+    final whiteKeyWidth = size.width / totalWhiteKeys;
+
+    final whitePaint = Paint()..color = Colors.white;
+    final blackPaint = Paint()..color = Colors.black;
+    final highlightPaint = Paint()..color = Colors.blue.withOpacity(0.7);
+    final outlinePaint = Paint()
+      ..color = Colors.grey[400]!
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    final whiteNoteNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    final blackNoteNames = ['C#', 'D#', '', 'F#', 'G#', 'A#', ''];
+    final currentNoteName = note.isNotEmpty ? note.substring(0, note.length - 1) : '';
+
+    // 1. Draw white keys and their outlines first
+    for (int i = 0; i < totalWhiteKeys; i++) {
+      final keyRect = Rect.fromLTWH(i * whiteKeyWidth, pianoTop, whiteKeyWidth, pianoAreaHeight);
+      canvas.drawRect(keyRect, whitePaint);
+      canvas.drawRect(keyRect, outlinePaint);
+    }
+
+    // 2. Draw black keys on top of the white key outlines
+    for (int i = 0; i < totalWhiteKeys; i++) {
+      final noteIndexInOctave = i % 7;
+      if (blackNoteNames[noteIndexInOctave].isEmpty) continue;
+
+      final blackKeyWidth = whiteKeyWidth * 0.6;
+      final blackKeyHeight = pianoAreaHeight * 0.6;
+      final keyRect = Rect.fromLTWH(
+        (i + 1) * whiteKeyWidth - (blackKeyWidth / 2),
+        pianoTop,
+        blackKeyWidth,
+        blackKeyHeight,
+      );
+      canvas.drawRect(keyRect, blackPaint);
+    }
+
+    // 3. Draw highlights on top of everything
+    if (currentNoteName.isNotEmpty) {
+      if (currentNoteName.contains('#')) {
+        for (int i = 0; i < totalWhiteKeys; i++) {
+          final noteIndexInOctave = i % 7;
+          if (blackNoteNames[noteIndexInOctave] == currentNoteName) {
+            final blackKeyWidth = whiteKeyWidth * 0.6;
+            final blackKeyHeight = pianoAreaHeight * 0.6;
+            final keyRect = Rect.fromLTWH((i + 1) * whiteKeyWidth - (blackKeyWidth / 2), pianoTop,
+                blackKeyWidth, blackKeyHeight);
+            canvas.drawRect(keyRect, highlightPaint);
+          }
+        }
+      } else {
+        for (int i = 0; i < totalWhiteKeys; i++) {
+          final noteIndexInOctave = i % 7;
+          if (whiteNoteNames[noteIndexInOctave] == currentNoteName) {
+            final keyRect =
+                Rect.fromLTWH(i * whiteKeyWidth, pianoTop, whiteKeyWidth, pianoAreaHeight);
+            canvas.drawRect(keyRect, highlightPaint);
+          }
+        }
+      }
     }
   }
 
