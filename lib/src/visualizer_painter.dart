@@ -255,6 +255,8 @@ class VisualizerPainter extends CustomPainter {
     final whiteNoteNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
     final blackNoteNames = ['C#', 'D#', '', 'F#', 'G#', 'A#', ''];
     final currentNoteName = note.isNotEmpty ? note.substring(0, note.length - 1) : '';
+    final octave = note.isNotEmpty ? (int.tryParse(note.substring(note.length - 1)) ?? 4) : 4;
+    final targetOctaveIndex = octave % 3;
 
     // 1. Draw white keys and their outlines first
     for (int i = 0; i < totalWhiteKeys; i++) {
@@ -284,21 +286,27 @@ class VisualizerPainter extends CustomPainter {
       if (currentNoteName.contains('#')) {
         for (int i = 0; i < totalWhiteKeys; i++) {
           final noteIndexInOctave = i % 7;
-          if (blackNoteNames[noteIndexInOctave] == currentNoteName) {
+          final keyOctave = i ~/ 7;
+          if (blackNoteNames[noteIndexInOctave] == currentNoteName &&
+              keyOctave == targetOctaveIndex) {
             final blackKeyWidth = whiteKeyWidth * 0.6;
             final blackKeyHeight = pianoAreaHeight * 0.6;
             final keyRect = Rect.fromLTWH((i + 1) * whiteKeyWidth - (blackKeyWidth / 2), pianoTop,
                 blackKeyWidth, blackKeyHeight);
             canvas.drawRect(keyRect, highlightPaint);
+            break; // Found the key, no need to continue
           }
         }
       } else {
         for (int i = 0; i < totalWhiteKeys; i++) {
           final noteIndexInOctave = i % 7;
-          if (whiteNoteNames[noteIndexInOctave] == currentNoteName) {
+          final keyOctave = i ~/ 7;
+          if (whiteNoteNames[noteIndexInOctave] == currentNoteName &&
+              keyOctave == targetOctaveIndex) {
             final keyRect =
                 Rect.fromLTWH(i * whiteKeyWidth, pianoTop, whiteKeyWidth, pianoAreaHeight);
             canvas.drawRect(keyRect, highlightPaint);
+            break; // Found the key, no need to continue
           }
         }
       }
