@@ -25,7 +25,6 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
   final AudioAnalysisService _analysisService = AudioAnalysisService();
   StreamSubscription<Uint8List>? _audioStreamSubscription;
   late final AnimationController _animationController;
-  Timer? _visualizerTimer;
 
   // ignore: unused_field
   final bool _isRecording = false;
@@ -35,7 +34,7 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
   List<ColorSpark> _colorSparks = [];
   List<ShapeSpark> _shapeSparks = [];
   bool _isInitialized = false;
-  VisualizerType _currentType = VisualizerType.circles;
+  VisualizerType _currentType = VisualizerType.bars;
   int _highlightCounter = 0;
 
   final Map<String, Color> _noteColorMap = {
@@ -61,15 +60,6 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
       duration: const Duration(milliseconds: 1000),
     )..repeat();
 
-    _visualizerTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (mounted) {
-        setState(() {
-          final nextIndex = (_currentType.index + 1) % VisualizerType.values.length;
-          _currentType = VisualizerType.values[nextIndex];
-        });
-      }
-    });
-
     _init();
   }
 
@@ -91,8 +81,14 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
     _stopRecording();
     _recorder.dispose();
     _animationController.dispose();
-    _visualizerTimer?.cancel();
     super.dispose();
+  }
+
+  void _changeVisualizationType() {
+    setState(() {
+      final nextIndex = (_currentType.index + 1) % VisualizerType.values.length;
+      _currentType = VisualizerType.values[nextIndex];
+    });
   }
 
   Future<void> _startRecording() async {
@@ -249,22 +245,37 @@ class _MusicVisualizerState extends State<MusicVisualizer> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return _isInitialized
-        ? AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return CustomPaint(
-                size: Size.infinite,
-                painter: VisualizerPainter(
-                  type: _currentType,
-                  note: _note,
-                  fftData: _fftData,
-                  barSparks: _colorSparks,
-                  shapeSparks: _shapeSparks,
-                ),
-              );
-            },
-          )
-        : const Center(child: CircularProgressIndicator());
+    if (!_isInitialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Stack(
+      children: [
+        AnimatedBuilder(
+          animation: _animationController,
+          builder: (context, child) {
+            return CustomPaint(
+              size: Size.infinite,
+              painter: VisualizerPainter(
+                type: _currentType,
+                note: _note,
+                fftData: _fftData,
+                barSparks: _colorSparks,
+                shapeSparks: _shapeSparks,
+              ),
+            );
+          },
+        ),
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+            onPressed: _changeVisualizationType,
+            backgroundColor: Colors.black.withOpacity(0.5),
+            hoverColor: Colors.black.withOpacity(0.7),
+            child: const Icon(Icons.sync_alt, color: Colors.white),
+          ),
+        ),
+      ],
+    );
   }
 }
